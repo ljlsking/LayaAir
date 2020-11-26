@@ -728,8 +728,7 @@ export class Context {
 	}
 
 	set globalCompositeOperation(value: string) {
-		var n: any = BlendMode.TOINT[value];
-
+		var n = BlendMode.TOINT[value];
 		n == null || (this._nBlendType === n) || (SaveBase.save(this, SaveBase.TYPE_GLOBALCOMPOSITEOPERATION, this, true), this._curSubmit = SubmitBase.RENDERBASE, this._nBlendType = n /*, _shader2D.ALPHA = 1*/);
 	}
 
@@ -1600,7 +1599,13 @@ export class Context {
 		return false;
 	}
 
-	drawTriangles(tex: Texture, x: number, y: number, vertices: Float32Array, uvs: Float32Array, indices: Uint16Array, matrix: Matrix, alpha: number, color: ColorFilter, blendMode: string, colorNum: number = 0xffffffff): void {
+	drawTriangles(tex: Texture, 
+			x: number, y: number, 
+			vertices: Float32Array, 
+			uvs : Float32Array, 
+			indices : Uint16Array, 
+			matrix : Matrix, alpha: number, color: ColorFilter, blendMode: string, colorNum: number = 0xffffffff): void {
+
 		if (!tex._getSource()) { //source内调用tex.active();
 			if (this.sprite) {
 				ILaya.systemTimer.callLater(this, this._repaintSprite);
@@ -2624,7 +2629,7 @@ export class Context {
 }
 
 
-
+/** @internal */
 class ContextParams {
 	static DEFAULT: ContextParams;
 

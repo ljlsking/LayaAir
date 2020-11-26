@@ -3,7 +3,6 @@ import { Laya } from "../../../Laya";
 import { Node } from "../../display/Node";
 import { Event } from "../../events/Event";
 import { LayaGL } from "../../layagl/LayaGL";
-import { Render } from "../../renders/Render";
 import { FilterMode } from "../../resource/FilterMode";
 import { RenderTextureDepthFormat, RenderTextureFormat } from "../../resource/RenderTextureFormat";
 import { SystemUtils } from "../../webgl/SystemUtils";
@@ -12,7 +11,6 @@ import { PostProcess } from "../component/PostProcess";
 import { Cluster } from "../graphics/renderPath/Cluster";
 import { BoundFrustum } from "../math/BoundFrustum";
 import { Matrix4x4 } from "../math/Matrix4x4";
-import { Plane } from "../math/Plane";
 import { Ray } from "../math/Ray";
 import { Vector2 } from "../math/Vector2";
 import { Vector3 } from "../math/Vector3";
@@ -50,12 +48,29 @@ export enum CameraClearFlags {
 }
 
 /**
+ * 相机事件标记
+ */
+export enum CameraEventFlags {
+	//BeforeDepthTexture,
+	//AfterDepthTexture,
+	//BeforeDepthNormalsTexture,
+	//AfterDepthNormalTexture,
+	/**在渲染非透明物体之前。*/
+	BeforeForwardOpaque = 0,
+	/**在渲染天空盒之前。*/
+	BeforeSkyBox = 2,
+	/**在渲染透明物体之前。*/
+	BeforeTransparent = 4,
+	/**在后期处理之前。*/
+	BeforeImageEffect = 6,
+	/**所有渲染之后。*/
+	AfterEveryThing = 8,
+}
+
+/**
  * <code>Camera</code> 类用于创建摄像机。
  */
 export class Camera extends BaseCamera {
-	/** @internal */
-	static CAMERAEVENT_POSTPROCESS: number = 0;
-
 	/** @internal */
 	static _tempVector20: Vector2 = new Vector2();
 
@@ -86,14 +101,17 @@ export class Camera extends BaseCamera {
 	private _viewportParams: Vector4 = new Vector4();
 	/** @internal */
 	private _projectionParams: Vector4 = new Vector4();
-
+	/** @internal*/
+	private _needBuiltInRenderTexture:boolean = false;
 
 	/** @internal */
 	_offScreenRenderTexture: RenderTexture = null;
 	/** @internal */
 	_internalRenderTexture: RenderTexture = null;
-	/** @internal */
-	_postProcessCommandBuffers: CommandBuffer[] = [];
+
+
+	private _cameraEventCommandBuffer:Object = {};
+
 	/** @internal */
 	_clusterXPlanes: Vector3[];
 	/** @internal */
@@ -230,27 +248,6 @@ export class Camera extends BaseCamera {
 	 */
 	get boundFrustum(): BoundFrustum {
 		this._boundFrustum.matrix = this.projectionViewMatrix;
-		if (Render.supportWebGLPlusCulling) {
-			var near: Plane = this._boundFrustum.near;
-			var far: Plane = this._boundFrustum.far;
-			var left: Plane = this._boundFrustum.left;
-			var right: Plane = this._boundFrustum.right;
-			var top: Plane = this._boundFrustum.top;
-			var bottom: Plane = this._boundFrustum.bottom;
-			var nearNE: Vector3 = near.normal;
-			var farNE: Vector3 = far.normal;
-			var leftNE: Vector3 = left.normal;
-			var rightNE: Vector3 = right.normal;
-			var topNE: Vector3 = top.normal;
-			var bottomNE: Vector3 = bottom.normal;
-			var buffer: Float32Array = this._boundFrustumBuffer;
-			buffer[0] = nearNE.x, buffer[1] = nearNE.y, buffer[2] = nearNE.z, buffer[3] = near.distance;
-			buffer[4] = farNE.x, buffer[5] = farNE.y, buffer[6] = farNE.z, buffer[7] = far.distance;
-			buffer[8] = leftNE.x, buffer[9] = leftNE.y, buffer[10] = leftNE.z, buffer[11] = left.distance;
-			buffer[12] = rightNE.x, buffer[13] = rightNE.y, buffer[14] = rightNE.z, buffer[15] = right.distance;
-			buffer[16] = topNE.x, buffer[17] = topNE.y, buffer[18] = topNE.z, buffer[19] = top.distance;
-			buffer[20] = bottomNE.x, buffer[21] = bottomNE.y, buffer[22] = bottomNE.z, buffer[23] = bottom.distance;
-		}
 
 		return this._boundFrustum;
 	}
@@ -281,9 +278,8 @@ export class Camera extends BaseCamera {
 
 	set postProcess(value: PostProcess) {
 		this._postProcess = value;
-		var postProcessCommandBuffer: CommandBuffer = new CommandBuffer();
-		this.addCommandBuffer(Camera.CAMERAEVENT_POSTPROCESS, postProcessCommandBuffer);
-		value._init(this, postProcessCommandBuffer);
+		if(!value) return;
+		value && value._init(this);
 	}
 
 	/**
@@ -303,6 +299,18 @@ export class Camera extends BaseCamera {
 	}
 
 	/**
+	 * 是否使用正在渲染的RenderTexture为CommandBuffer服务，设置为true
+	 * 一般和CommandBuffer一起使用
+	 */
+	get enableBuiltInRenderTexture():boolean{
+		return this._needBuiltInRenderTexture;
+	}
+
+	set enableBuiltInRenderTexture(value:boolean){
+		this._needBuiltInRenderTexture = value;
+	}
+
+	/**
 	 * 创建一个 <code>Camera</code> 实例。
 	 * @param	aspectRatio 横纵比。
 	 * @param	nearPlane 近裁面。
@@ -317,8 +325,6 @@ export class Camera extends BaseCamera {
 		this._normalizedViewport = new Viewport(0, 0, 1, 1);
 		this._aspectRatio = aspectRatio;
 		this._boundFrustum = new BoundFrustum(new Matrix4x4());
-		if (Render.supportWebGLPlusCulling)
-			this._boundFrustumBuffer = new Float32Array(24);
 
 		this._calculateProjectionMatrix();
 		Laya.stage.on(Event.RESIZE, this, this._onScreenSizeChanged);
@@ -431,15 +437,7 @@ export class Camera extends BaseCamera {
 	 * @internal
 	 */
 	_needInternalRenderTexture(): boolean {
-		return this._postProcess || this._enableHDR ? true : false;//condition of internal RT
-	}
-
-	/**
-	 * @internal
-	 */
-	_applyPostProcessCommandBuffers(): void {
-		for (var i: number = 0, n: number = this._postProcessCommandBuffers.length; i < n; i++)
-			this._postProcessCommandBuffers[i]._apply();
+		return this._postProcess || this._enableHDR ||this._needBuiltInRenderTexture ? true : false;//condition of internal RT
 	}
 
 	/**
@@ -536,6 +534,33 @@ export class Camera extends BaseCamera {
 		}
 	}
 
+
+	/**
+	 * 调用渲染命令流
+	 * @param event 
+	 * @param renderTarget 
+	 * @param context 
+	 */
+	_applyCommandBuffer(event:number,context:RenderContext3D){
+		var gl: WebGLRenderingContext = LayaGL.instance;
+		var commandBufferArray:CommandBuffer[] = this._cameraEventCommandBuffer[event];
+		if(!commandBufferArray||commandBufferArray.length==0)
+			return;
+		if(this._internalRenderTexture)
+			this._internalRenderTexture._end();
+		commandBufferArray.forEach(function(value){
+			value._context = context;
+			value._apply();
+		});
+		(RenderTexture.currentActive)&&(RenderTexture.currentActive._end());
+		if(this._internalRenderTexture)
+			this._internalRenderTexture._start();
+		else{
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+		}
+		//TODO：优化 恢复渲染区域
+		gl.viewport(0,0,context.viewport.width, context.viewport.height);
+	}
 	/**
 	 * @override
 	 * @param shader 着色器
@@ -550,7 +575,7 @@ export class Camera extends BaseCamera {
 		var gl: WebGLRenderingContext = LayaGL.instance;
 		var context: RenderContext3D = RenderContext3D._instance;
 		var scene: Scene3D = context.scene = <Scene3D>this._scene;
-		context.pipelineMode = "Forward";
+		context.pipelineMode = context.configPipeLineMode;
 
 		if (needInternalRT) {
 			this._internalRenderTexture = RenderTexture.createFromPool(viewport.width, viewport.height, this._getRenderTextureFormat(), RenderTextureDepthFormat.DEPTH_16);
@@ -627,24 +652,32 @@ export class Camera extends BaseCamera {
 
 		scene._preCulling(context, this, shader, replacementTag);
 		scene._clear(gl, context);
-		scene._renderScene(context);
-		scene._postRenderScript();//TODO:duo相机是否重复
-		(renderTex) && (renderTex._end());
 
+		this._applyCommandBuffer(CameraEventFlags.BeforeForwardOpaque,context);
+		scene._renderScene(context,ILaya3D.Scene3D.SCENERENDERFLAG_RENDERQPAQUE);
+		this._applyCommandBuffer(CameraEventFlags.BeforeSkyBox,context);
+		scene._renderScene(context,ILaya3D.Scene3D.SCENERENDERFLAG_SKYBOX);
+		this._applyCommandBuffer(CameraEventFlags.BeforeTransparent,context);
+		scene._renderScene(context,ILaya3D.Scene3D.SCENERENDERFLAG_RENDERTRANSPARENT);
+		
+		scene._postRenderScript();//TODO:duo相机是否重复
+		this._applyCommandBuffer(CameraEventFlags.BeforeImageEffect,context);
+		(renderTex) && (renderTex._end());
+		
 		if (needInternalRT) {
 			if (this._postProcess) {
 				this._postProcess._render();
-				this._applyPostProcessCommandBuffers();
-			} else if (this._enableHDR) {
+				this._postProcess._applyPostProcessCommandBuffers();
+			} else if (this._enableHDR||this._needBuiltInRenderTexture) {
 				var canvasWidth: number = this._getCanvasWidth(), canvasHeight: number = this._getCanvasHeight();
 				this._screenOffsetScale.setValue(viewport.x / canvasWidth, viewport.y / canvasHeight, viewport.width / canvasWidth, viewport.height / canvasHeight);
-				var blit: BlitScreenQuadCMD = BlitScreenQuadCMD.create(this._internalRenderTexture, this._offScreenRenderTexture ? this._offScreenRenderTexture : null, this._screenOffsetScale);
+				var blit: BlitScreenQuadCMD = BlitScreenQuadCMD.create(this._internalRenderTexture, this._offScreenRenderTexture ? this._offScreenRenderTexture : null, this._screenOffsetScale,null,null,0,BlitScreenQuadCMD._SCREENTYPE_QUAD,null,true);
 				blit.run();
 				blit.recover();
 			}
 			RenderTexture.recoverToPool(this._internalRenderTexture);
 		}
-
+		this._applyCommandBuffer(CameraEventFlags.AfterEveryThing,context);
 		if (needShadowCasterPass||spotneedShadowCasterPass)
 			shadowCasterPass.cleanUp();
 	}
@@ -730,45 +763,40 @@ export class Camera extends BaseCamera {
 	}
 
 	/**
-	 * 在特定渲染管线阶段添加指令缓存。
+	 * 增加camera渲染节点渲染缓存
+	 * @param event 相机事件标志
+	 * @param commandBuffer 渲染命令流
 	 */
-	addCommandBuffer(event: number, commandBuffer: CommandBuffer): void {
-		switch (event) {
-			case Camera.CAMERAEVENT_POSTPROCESS:
-				this._postProcessCommandBuffers.push(commandBuffer);
-				commandBuffer._camera = this;
-				break;
-			default:
-				throw "Camera:unknown event.";
-		}
+	addCommandBuffer(event: CameraEventFlags, commandBuffer: CommandBuffer): void {
+		var commandBufferArray:CommandBuffer[] = this._cameraEventCommandBuffer[event];
+		if(!commandBufferArray) commandBufferArray = this._cameraEventCommandBuffer[event] = [];
+		if(commandBufferArray.indexOf(commandBuffer) < 0)
+			commandBufferArray.push(commandBuffer);
+		commandBuffer._camera = this;
 	}
 
 	/**
-	 * 在特定渲染管线阶段移除指令缓存。
+	 * 移除camera渲染节点渲染缓存
+	 * @param event 相机事件标志
+	 * @param commandBuffer 渲染命令流
 	 */
-	removeCommandBuffer(event: number, commandBuffer: CommandBuffer): void {
-		switch (event) {
-			case Camera.CAMERAEVENT_POSTPROCESS:
-				var index: number = this._postProcessCommandBuffers.indexOf(commandBuffer);
-				if (index !== -1)
-					this._postProcessCommandBuffers.splice(index, 1);
-				break;
-			default:
-				throw "Camera:unknown event.";
+	removeCommandBuffer(event: CameraEventFlags, commandBuffer: CommandBuffer): void {
+		var commandBufferArray:CommandBuffer[] = this._cameraEventCommandBuffer[event];
+		if(commandBufferArray){
+			var index:number = commandBufferArray.indexOf(commandBuffer);
+			if(index!=-1) commandBufferArray.splice(index,1);
 		}
+		else
+			throw "Camera:unknown event.";
 	}
 
 	/**
-	 * 在特定渲染管线阶段移除所有指令缓存。
+	 * 移除camera相机节点的所有渲染缓存
+	 * @param event 相机事件标志
 	 */
-	removeCommandBuffers(event: number): void {
-		switch (event) {
-			case Camera.CAMERAEVENT_POSTPROCESS:
-				this._postProcessCommandBuffers.length = 0;
-				break;
-			default:
-				throw "Camera:unknown event.";
-		}
+	removeCommandBuffers(event: CameraEventFlags): void {
+		if(this._cameraEventCommandBuffer[event])
+			this._cameraEventCommandBuffer[event].length = 0;
 	}
 
 	/**

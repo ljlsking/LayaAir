@@ -2,7 +2,7 @@
 	#define NO_NATIVE_SHADOWMAP
 #endif
 
-#ifdef NO_NATIVE_SHADOWMAP
+#if defined(NO_NATIVE_SHADOWMAP)
 	#define TEXTURE2D_SHADOW(textureName) uniform mediump sampler2D textureName
 	#define SAMPLE_TEXTURE2D_SHADOW(textureName, coord3) (texture2D(textureName,coord3.xy).r<coord3.z?0.0:1.0)
 	#define TEXTURE2D_SHADOW_PARAM(shadowMap) mediump sampler2D shadowMap
@@ -68,7 +68,7 @@ uniform vec4 u_ShadowBias; // x: depth bias, y: normal bias
 
 
 
-#ifdef CALCULATE_SHADOWS
+#if defined(CALCULATE_SHADOWS)
 
 	TEXTURE2D_SHADOW(u_ShadowMap);
 
@@ -138,7 +138,7 @@ uniform vec4 u_ShadowBias; // x: depth bias, y: normal bias
 	}
 #endif
 
-#ifdef CALCULATE_SPOTSHADOWS
+#if defined(CALCULATE_SPOTSHADOWS)//shader���Զ���ĺ겻����ifdef ����ĳ�if defined
 	TEXTURE2D_SHADOW(u_SpotShadowMap);
 	uniform mat4 u_SpotViewProjectMatrix;
 	float sampleSpotShadowmap(vec4 shadowCoord)

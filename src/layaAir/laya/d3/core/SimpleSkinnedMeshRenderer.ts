@@ -18,9 +18,15 @@ import { SingletonList } from "../component/SingletonList";
 import { VertexBuffer3D } from "../graphics/VertexBuffer3D";
 import { MeshSprite3DShaderDeclaration } from "./MeshSprite3DShaderDeclaration";
 import { Utils3D } from "../utils/Utils3D";
-import { SimpleSkinnedMeshSprite3D } from "./SimpleSkinnedMeshSprite3D";
 
 export class SimpleSkinnedMeshRenderer extends SkinnedMeshRenderer{
+    /**@internal 解决循环引用 */
+    static SIMPLE_SIMPLEANIMATORTEXTURE:number;
+    /**@internal 解决循环引用*/
+    static SIMPLE_SIMPLEANIMATORPARAMS:number;
+    /**@internal 解决循环引用*/
+    static SIMPLE_SIMPLEANIMATORTEXTURESIZE:number;
+    
     /**@internal */
     private _simpleAnimatorTexture:Texture2D;
     /**@internal */
@@ -30,28 +36,38 @@ export class SimpleSkinnedMeshRenderer extends SkinnedMeshRenderer{
     /**@internal  x simpleAnimation offset,y simpleFrameOffset*/
     private _simpleAnimatorOffset:Vector2;
     /**@internal */
-    private _bonesNums:number;
+    _bonesNums:number;
     
     /**
-	 * 动画贴图
+     * @internal
+	 * 设置动画帧贴图
 	 */
     get simpleAnimatorTexture():Texture2D{
         return this._simpleAnimatorTexture;
     }
 
+    /**
+     * @internal
+     */
     set simpleAnimatorTexture(value:Texture2D){
         this._simpleAnimatorTexture = value;
         this._simpleAnimatorTextureSize = value.width;
-        this._shaderValues.setTexture(SimpleSkinnedMeshSprite3D.SIMPLE_SIMPLEANIMATORTEXTURE,value);
-        this._shaderValues.setNumber(SimpleSkinnedMeshSprite3D.SIMPLE_SIMPLEANIMATORTEXTURESIZE,this._simpleAnimatorTextureSize);
+        this._shaderValues.setTexture(SimpleSkinnedMeshRenderer.SIMPLE_SIMPLEANIMATORTEXTURE,value);
+        value._addReference();
+        this._shaderValues.setNumber(SimpleSkinnedMeshRenderer.SIMPLE_SIMPLEANIMATORTEXTURESIZE,this._simpleAnimatorTextureSize);
     }
 
     /**
-     * 动画帧数
+     * @internal
+     * 设置动画帧数参数
      */
     get simpleAnimatorOffset():Vector2{
         return this._simpleAnimatorOffset;
     }
+    
+    /**
+     * @internal
+     */
     set simpleAnimatorOffset(value:Vector2){
         value.cloneTo(this._simpleAnimatorOffset);
     }
@@ -74,7 +90,6 @@ export class SimpleSkinnedMeshRenderer extends SkinnedMeshRenderer{
 	 */
 	private _computeAnimatorParamsData(): void {
         if(this._cacheMesh){
-            this._bonesNums = this.bones.length;
             this._simpleAnimatorParams.x = this._simpleAnimatorOffset.x;
             this._simpleAnimatorParams.y =Math.round(this._simpleAnimatorOffset.y)*this._bonesNums*4;
         }
@@ -122,7 +137,7 @@ export class SimpleSkinnedMeshRenderer extends SkinnedMeshRenderer{
                     this._shaderValues.setMatrix4x4(Sprite3D.WORLDMATRIX, transform.worldMatrix);
                 }
                 this._computeAnimatorParamsData();
-                this._shaderValues.setVector(SimpleSkinnedMeshSprite3D.SIMPLE_SIMPLEANIMATORPARAMS,this._simpleAnimatorParams);
+                this._shaderValues.setVector(SimpleSkinnedMeshRenderer.SIMPLE_SIMPLEANIMATORPARAMS,this._simpleAnimatorParams);
                 break;
             case RenderElement.RENDERTYPE_INSTANCEBATCH:
                 var worldMatrixData: Float32Array = SubMeshInstanceBatch.instance.instanceWorldMatrixData;
@@ -213,9 +228,16 @@ export class SimpleSkinnedMeshRenderer extends SkinnedMeshRenderer{
         }
     }
 
+    /**
+     * 删除节点
+     */
     _destroy():void{
         if (this._cacheRootBone)
         (!this._cacheRootBone.destroyed) && (this._cacheRootBone.transform.off(Event.TRANSFORM_CHANGED, this, this._onWorldMatNeedChange));
+        (this._simpleAnimatorTexture)&&this._simpleAnimatorTexture._removeReference();
+        this._simpleAnimatorTexture = null;
+       
+        
     }
 
 }

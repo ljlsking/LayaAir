@@ -580,6 +580,7 @@ export class LoaderManager extends EventDispatcher {
     }
 }
 
+/** @internal */
 class ResInfo extends EventDispatcher {
     url: string;
     type: string|null;
@@ -595,11 +596,18 @@ class ResInfo extends EventDispatcher {
 }
 
 export interface loadItem{
+    /**@internal */
     url:string;
+    /**@internal */
     type?:string;
+    /**@internal */
     size?:number;
+    /**@internal */
     priority?:number;
+    /**@internal */
     useWorkerLoader?:boolean;
+    /**@internal */
     progress?:number;
+    /**@internal */
     group?:string;
 }

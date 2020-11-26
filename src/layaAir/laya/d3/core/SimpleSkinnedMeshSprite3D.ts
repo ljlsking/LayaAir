@@ -12,7 +12,6 @@ import { MeshSprite3D } from "./MeshSprite3D";
 import { RenderableSprite3D } from "./RenderableSprite3D";
 import { Sprite3D } from "./Sprite3D";
 import { Material } from "./material/Material";
-import { SkinnedMeshSprite3DShaderDeclaration } from "./SkinnedMeshSprite3DShaderDeclaration";
 import { SimpleSkinnedMeshRenderer } from "./SimpleSkinnedMeshRenderer";
 import { Texture2D } from "../../resource/Texture2D";
 
@@ -33,7 +32,9 @@ export class SimpleSkinnedMeshSprite3D extends RenderableSprite3D {
 	 * @internal
 	 */
 	static __init__(): void {
-		SkinnedMeshSprite3DShaderDeclaration.SHADERDEFINE_SIMPLEBONE = Shader3D.getDefineByName("SIMPLEBONE");
+		SimpleSkinnedMeshRenderer.SIMPLE_SIMPLEANIMATORPARAMS = SimpleSkinnedMeshSprite3D.SIMPLE_SIMPLEANIMATORPARAMS;
+		SimpleSkinnedMeshRenderer.SIMPLE_SIMPLEANIMATORTEXTURE = SimpleSkinnedMeshSprite3D.SIMPLE_SIMPLEANIMATORTEXTURE;
+		SimpleSkinnedMeshRenderer.SIMPLE_SIMPLEANIMATORTEXTURESIZE = SimpleSkinnedMeshSprite3D.SIMPLE_SIMPLEANIMATORTEXTURESIZE;
 	}
 
 	/** @internal */
@@ -111,6 +112,8 @@ export class SimpleSkinnedMeshSprite3D extends RenderableSprite3D {
 			var n: number;
 			for (i = 0, n = bonesData.length; i < n; i++)
 				render.bones.push(spriteMap[bonesData[i]]);
+
+			render._bonesNums = data.bonesNums? data.bonesNums:render.bones.length;
 		} else {//[兼容代码]
 			(data.rootBone) && (render._setRootBone(data.rootBone));//[兼容性]
 		}
@@ -177,7 +180,10 @@ export class SimpleSkinnedMeshSprite3D extends RenderableSprite3D {
 		var lbb: Bounds = meshRender.localBounds;
 		(lbb) && (lbb.cloneTo(destMeshRender.localBounds));
 		
+
+		destMeshRender.simpleAnimatorOffset = meshRender.simpleAnimatorOffset;
 		destMeshRender.simpleAnimatorTexture = meshRender.simpleAnimatorTexture;
+		destMeshRender._bonesNums = meshRender._bonesNums;
 
 		super._cloneTo(destObject, srcRoot, dstRoot);//父类函数在最后,组件应该最后赋值，否则获取材质默认值等相关函数会有问题
 	}

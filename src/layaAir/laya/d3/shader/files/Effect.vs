@@ -1,4 +1,10 @@
+#if defined(GL_FRAGMENT_PRECISION_HIGH)// 原来的写法会被我们自己的解析流程处理，而我们的解析是不认内置宏的，导致被删掉，所以改成 if defined 了
+	precision highp float;
+#else
+	precision mediump float;
+#endif
 #include "Lighting.glsl";
+#include "LayaUtile.glsl";
 
 attribute vec4 a_Position;
 attribute vec4 a_Color;
@@ -26,6 +32,7 @@ varying vec2 v_Texcoord0;
 	uniform mat4 u_Bones[c_MaxBoneCount];
 #endif
 
+
 void main()
 {
 	vec4 position;
@@ -50,7 +57,7 @@ void main()
 			skinTransform += u_Bones[int(a_BoneIndices.w)] * a_BoneWeights.w;
 		#endif
 		position=skinTransform*a_Position;
-	#else
+	 #else
 		position=a_Position;
 	#endif
 	#ifdef GPU_INSTANCE

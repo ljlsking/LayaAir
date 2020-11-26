@@ -19,10 +19,9 @@ import { SubMeshRenderElement } from "./render/SubMeshRenderElement";
 import { RenderableSprite3D } from "./RenderableSprite3D";
 import { Sprite3D } from "./Sprite3D";
 import { Transform3D } from "./Transform3D";
-import { LayaGPU } from "../../webgl/LayaGPU";
-import { LayaGL } from "../../layagl/LayaGL";
 import { VertexBuffer3D } from "../graphics/VertexBuffer3D";
-import { VertexMesh } from "../graphics/Vertex/VertexMesh";
+import { ReflectionProbeMode, ReflectionProbe } from "./reflectionProbe/ReflectionProbe";
+import { TextureCube } from "../resource/TextureCube";
 
 /**
  * <code>MeshRenderer</code> 类用于网格渲染器。
@@ -83,17 +82,6 @@ export class MeshRenderer extends BaseRender {
 			var worldMat: Matrix4x4 = ((<MeshSprite3D>this._owner)).transform.worldMatrix;
 			sharedMesh.bounds._tranform(worldMat, this._bounds);
 		}
-		if (Render.supportWebGLPlusCulling) {//[NATIVE]
-			var min: Vector3 = this._bounds.getMin();
-			var max: Vector3 = this._bounds.getMax();
-			var buffer: Float32Array = FrustumCulling._cullingBuffer;
-			buffer[this._cullingBufferIndex + 1] = min.x;
-			buffer[this._cullingBufferIndex + 2] = min.y;
-			buffer[this._cullingBufferIndex + 3] = min.z;
-			buffer[this._cullingBufferIndex + 4] = max.x;
-			buffer[this._cullingBufferIndex + 5] = max.y;
-			buffer[this._cullingBufferIndex + 6] = max.z;
-		}
 	}
 
 	/**
@@ -150,6 +138,29 @@ export class MeshRenderer extends BaseRender {
 				worldBuffer.setData(worldMatrixData.buffer, 0, 0, count * 16 * 4);
 				this._shaderValues.addDefine(MeshSprite3DShaderDeclaration.SHADERDEFINE_GPU_INSTANCE);
 				break;
+		}
+		//更新反射探针
+		if(!this._probReflection)
+		return;
+		if(this._reflectionMode==ReflectionProbeMode.off){
+			this._shaderValues.removeDefine(MeshSprite3DShaderDeclaration.SHADERDEFINE_SPECCUBE_BOX_PROJECTION);
+			this._shaderValues.setVector(RenderableSprite3D.REFLECTIONCUBE_HDR_PARAMS,ReflectionProbe.defaultTextureHDRDecodeValues);
+			this._shaderValues.setTexture(RenderableSprite3D.REFLECTIONTEXTURE,TextureCube.blackTexture);
+		}
+		else{
+			if(!this._probReflection.boxProjection){
+				this._shaderValues.removeDefine(MeshSprite3DShaderDeclaration.SHADERDEFINE_SPECCUBE_BOX_PROJECTION);
+				
+			}
+			else{
+				this._shaderValues.addDefine(MeshSprite3DShaderDeclaration.SHADERDEFINE_SPECCUBE_BOX_PROJECTION);
+				this._shaderValues.setVector3(RenderableSprite3D.REFLECTIONCUBE_PROBEPOSITION,this._probReflection.probePosition);
+				this._shaderValues.setVector3(RenderableSprite3D.REFLECTIONCUBE_PROBEBOXMAX,this._probReflection.boundsMax);
+				this._shaderValues.setVector3(RenderableSprite3D.REFLECTIONCUBE_PROBEBOXMIN,this._probReflection.boundsMin);
+			}
+			this._shaderValues.setTexture(RenderableSprite3D.REFLECTIONTEXTURE,this._probReflection.reflectionTexture);
+			this._shaderValues.setVector(RenderableSprite3D.REFLECTIONCUBE_HDR_PARAMS,this._probReflection.reflectionHDRParams);
+			
 		}
 	}
 

@@ -15,20 +15,32 @@ export class ShurikenParticleMaterial extends Material {
 	/**渲染状态_加色法混合。*/
 	static RENDERMODE_ADDTIVE: number = 1;
 
-
+	/**@internal */
 	static SHADERDEFINE_DIFFUSEMAP: ShaderDefine;
+	/**@internal */
 	static SHADERDEFINE_TINTCOLOR: ShaderDefine;
+	/**@internal */
 	static SHADERDEFINE_TILINGOFFSET: ShaderDefine;
+	/**@interanl */
 	static SHADERDEFINE_ADDTIVEFOG: ShaderDefine;
 
+	/**@internal */
 	static DIFFUSETEXTURE: number = Shader3D.propertyNameToID("u_texture");
+	/**@internal */
 	static TINTCOLOR: number = Shader3D.propertyNameToID("u_Tintcolor");
+	/**@internal */
 	static TILINGOFFSET: number = Shader3D.propertyNameToID("u_TilingOffset");
+	/**@internal */
 	static CULL: number = Shader3D.propertyNameToID("s_Cull");
+	/**@internal */
 	static BLEND: number = Shader3D.propertyNameToID("s_Blend");
+	/**@internal */
 	static BLEND_SRC: number = Shader3D.propertyNameToID("s_BlendSrc");
+	/**@internal */
 	static BLEND_DST: number = Shader3D.propertyNameToID("s_BlendDst");
+	/**@internal */
 	static DEPTH_TEST: number = Shader3D.propertyNameToID("s_DepthTest");
+	/**@internal */
 	static DEPTH_WRITE: number = Shader3D.propertyNameToID("s_DepthWrite");
 
 	/** 默认材质，禁止修改*/
@@ -46,6 +58,21 @@ export class ShurikenParticleMaterial extends Material {
 
 	/**@internal */
 	private _color: Vector4;
+
+	/**
+	 * @internal
+	 */
+	get _TintColor(): Vector4 {
+		return this.color;
+	}
+
+	/**
+	 * @internal
+	 */
+	set _TintColor(value: Vector4) {
+		this.color = value;
+	}
+
 
 	/**
 	 * @internal
@@ -104,6 +131,23 @@ export class ShurikenParticleMaterial extends Material {
 		this._color.w = value;
 		this.color = this._color;
 	}
+
+	/**
+	 * @internal
+	 */
+	get _MainTex_ST(): Vector4 {
+		return this._shaderValues.getVector(ShurikenParticleMaterial.TILINGOFFSET)
+	}
+
+	/**
+	 * @internal
+	 */
+	set _MainTex_ST(value: Vector4) {
+		var tilOff: Vector4 = (<Vector4>this._shaderValues.getVector(ShurikenParticleMaterial.TILINGOFFSET));
+		tilOff.setValue(value.x, value.y, value.z, value.w);
+		this.tilingOffset = tilOff;
+	}
+
 
 	/**
 	 * @internal
@@ -406,6 +450,9 @@ export class ShurikenParticleMaterial extends Material {
 		this._shaderValues.setInt(ShurikenParticleMaterial.DEPTH_TEST, value);
 	}
 
+	/**
+	 * 创建一个 <code>ShurikenParticleMaterial</code> 实例。
+	 */
 	constructor() {
 		super();
 		this.setShaderName("PARTICLESHURIKEN");
